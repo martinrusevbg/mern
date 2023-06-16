@@ -12,6 +12,8 @@ module.exports = function(app) {
 
     app.get("/api/all", controller.allAccess);
 
+    app.post("/api/share",[authJwt.verifyToken], controller.share);
+
     app.get(
         "/api/user",
         [authJwt.verifyToken],

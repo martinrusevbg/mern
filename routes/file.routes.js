@@ -11,7 +11,9 @@ module.exports = function(app) {
     });
 
     app.post("/api/upload",[authJwt.verifyToken], controller.upload);
+
     app.get("/api/files",[authJwt.verifyToken], controller.getListFiles);
+    app.get("/api/info",[authJwt.verifyToken], controller.getFileInfo);
     app.get("/api/file/:name",[authJwt.verifyToken], controller.download);
     app.delete("/api/file/:name",[authJwt.verifyToken], controller.deleted);
 };

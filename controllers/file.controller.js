@@ -2,6 +2,9 @@ const uploadFile = require("../middleware/upload");
 const fs = require('fs');
 const db = require("../models");
 const File = db.file;
+const userShare = db.userShare;
+const Sequelize = require("sequelize");
+const Op = Sequelize.Op;
 
 const upload = async (req, res) => {
     try {
@@ -26,9 +29,6 @@ const upload = async (req, res) => {
                 });
             });
 
-        // res.status(200).send({
-        //     message: "Uploaded the file successfully: " + req.file.originalname,
-        // });
     } catch (err) {
         res.status(500).send({
             message: `Could not upload the file. ${err}`,
@@ -48,17 +48,29 @@ const deleted = (req, res) => {
                 user_id: req.userId,
                 file_name: fileName
             }
-        }).then(function(rowDeleted){ // rowDeleted will return number of rows deleted
+        }).then(function(rowDeleted){
             if(rowDeleted === 1){
                 return res.status(200).send('Successfully! File has been Deleted.');
             }
         }, function(err){
             return res.status(400).send(err);
         });
-        // return res.status(200).send('Successfully! File has been Deleted.');
     } catch (err) {
         return res.status(400).send(err);
     }
+};
+
+const getFileInfo = (req, res) => {
+    // console.log('res.id: '+req.query.id);
+    userShare.findAll({
+        where: {
+            fileId: req.query.id,
+            userId: req.userId
+        }
+    })
+    .then(fileShare => {
+        res.status(200).send(fileShare);
+    });
 };
 
 const getListFiles = (req, res) => {
@@ -67,13 +79,15 @@ const getListFiles = (req, res) => {
         fs.mkdirSync(directoryPath);
     }
 
-    let filesInDB = [];
-    File.findAll({
+    File.findAndCountAll({
+        limit: Number(req.query.perpage),
+        offset: (Number(req.query.page) - 1)*(Number(req.query.perpage)),
         where: {
-            user_id: req.userId
+            user_id: req.userId,
+            file_name: { [Op.like]: `%${req.query.search}%` }
         }
-    }).then(function(filesInDB) {
-        // console.log("%%%%%%%%%%%%%%%%%%%%%%%%% ",filesInDB);
+    }).then(function(filesInDBRows) {
+
         fs.readdir(directoryPath, function (err, files) {
             if (err) {
                 res.status(500).send({
@@ -82,64 +96,39 @@ const getListFiles = (req, res) => {
             }
 
             let fileInfos = [];
-
+            let filesInDB = filesInDBRows.rows;
+            let filesShare = [];
             files.forEach((file) => {
-                console.log('req.userId',req.userId);
-                console.log('file_name',file);
                 for (let i = filesInDB.length -1; i >= 0 ; i--) {
                     if (filesInDB[i].file_name === file) {
+                        // userShare.findAll({
+                        //     where: {
+                        //         fileId: filesInDB[i].id,
+                        //         userId: req.userId
+                        //     }
+                        // })
+                        // .then(fileShare => {
+                        //     filesShare.push(fileShare);
+                        // });
+
                         fileInfos.push({
                             name: file,
+                            id: filesInDB[i].id,
                             url: directoryPath + file,
+                            createdAt: filesInDB[i].createdAt,
+                            // fileShare: filesShare
                         });
                         filesInDB.splice(i, 1);
                     }
                 }
             });
-            console.log('fileInfos',fileInfos);
-            res.status(200).send(fileInfos);
-            // res.status(200).send(fileInfos);
+            let data = {
+                files: fileInfos,
+                total: filesInDBRows.count
+            }
+            res.status(200).send(data);
         });
     })
-
-    // console.log('^^^^^^^^^^^^^^',filesInDB);
-    // fs.readdir(directoryPath, function (err, files) {
-    //     if (err) {
-    //         res.status(500).send({
-    //             message: "Unable to scan files!",
-    //         });
-    //     }
-    //
-    //     let fileInfos = [];
-    //
-    //     files.forEach((file) => {
-    //         console.log('req.userId',req.userId);
-    //         console.log('file_name',file);
-    //         File.findOne({
-    //             where: {
-    //                 user_id: req.userId,
-    //                 file_name: file
-    //             }
-    //         }).then(function(file) {
-    //             console.log("%%%%%%%%%%%%%%%%%%%%%%%%% ",file);
-    //             fileInfos.push({
-    //                 name: file.file_name,
-    //                 url: directoryPath + file.file_name,
-    //             });
-    //
-    //         })
-    //
-    //
-    //
-    //         // fileInfos.push({
-    //         //     name: file,
-    //         //     url: directoryPath + file,
-    //         // });
-    //     });
-    //     console.log('fileInfos',fileInfos);
-    //     res.status(200).send(fileInfos);
-    //     // res.status(200).send(fileInfos);
-    // });
 };
 
 const download = (req, res) => {
@@ -158,6 +147,7 @@ const download = (req, res) => {
 module.exports = {
     upload,
     getListFiles,
+    getFileInfo,
     download,
     deleted
 };
